@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kelkaam MDH</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root { --spotify-green: #1DB954; --bg-black: #000000; --card-grey: #181818; }
+        body { background-color: var(--bg-black); color: white; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .app-container { width: 100%; max-width: 400px; background: #121212; min-height: 100vh; padding: 20px; box-sizing: border-box; }
+        h1 { color: var(--spotify-green); text-align: center; font-size: 26px; margin-bottom: 20px; }
+        .step { display: none; }
+        .active { display: block; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        #singerList { max-height: 60vh; overflow-y: auto; padding-right: 5px; }
+        .singer-card { display: flex; align-items: center; background: var(--card-grey); margin-bottom: 12px; padding: 12px; border-radius: 12px; cursor: pointer; border: 2px solid transparent; }
+        .singer-card.selected { border-color: var(--spotify-green); }
+        .singer-card img { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; margin-right: 15px; }
+        .search-input { width: 100%; padding: 14px; border-radius: 10px; border: none; background: #282828; color: white; margin-bottom: 20px; }
+        .song-item { padding: 15px; border-radius: 8px; margin-bottom: 5px; cursor: pointer; }
+        .song-item:hover { background: #282828; color: var(--spotify-green); }
+        .footer-btn { background: var(--spotify-green); color: black; border: none; width: 100%; padding: 15px; border-radius: 30px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        .options-bar { display: flex; justify-content: space-around; background: #181818; padding: 10px; border-radius: 15px; margin-top: 15px; }
+        .option-btn { background: none; border: none; color: white; cursor: pointer; font-size: 14px; }
+        .option-btn.active { color: var(--spotify-green); font-weight: bold; }
+        .player-box { text-align: center; padding: 20px 0; }
+        .player-box img { width: 220px; height: 220px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.7); }
+        audio { width: 100%; margin-top: 20px; filter: invert(100%); }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h1>Kelkaam MDH</h1>
+    <div id="step1" class="step active">
+        <div id="singerList">
+            <div class="singer-card" onclick="selectSinger(this, 'Mubashir Perinthattiri')">
+                <img src="https://i.postimg.cc/ZKgJNNVz/download-(9).jpg">
+                <div class="singer-name">Mubashir Perinthattiri</div>
+            </div>
+        </div>
+        <button class="footer-btn" onclick="toStep2()">Next</button>
+    </div>
+
+    <div id="step2" class="step">
+        <h2 id="currentSingerTitle" style="color: var(--spotify-green);"></h2>
+        <input type="text" id="songSearch" class="search-input" placeholder="Paattukal thirayuka..." onkeyup="filterSongs()">
+        <div id="songDisplayList"></div>
+        <span onclick="showStep('step1')" style="cursor:pointer; color:#b3b3b3;">← Back</span>
+    </div>
+
+    <div id="step3" class="step">
+        <div class="player-box">
+            <img id="playingThumb" src="">
+            <h3 id="playingSongName">Song Name</h3>
+            <p id="playingArtistName" style="color:#b3b3b3;"></p>
+            <audio id="audioPlayer" controls autoplay></audio>
+            <div class="options-bar">
+                <button class="option-btn" id="repeatBtn" onclick="toggleRepeat()">🔁 Repeat: Off</button>
+                <button class="option-btn" onclick="playNextSong()">⏭ Next</button>
+            </div>
+        </div>
+        <span onclick="showStep('step2')" style="cursor:pointer; color:#b3b3b3; display:block; text-align:center; margin-top:20px;">← Back to List</span>
+    </div>
+</div>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js');
+        });
+    }
+
+    let selectedSingerName = "";
+    let selectedSingerImg = "";
+    let currentSongIndex = -1;
+    let isRepeat = false;
+
+    const songData = {
+        "Mubashir Perinthattiri": [
+            { title: "Twaifinte Veedikal", url: "https://image2url.com/r2/default/audio/1769771784287-ec008311-4cdd-419f-9545-4d2e8b86fc8d.mp3" },
+            { title: "Ya Muhammad Noore Mujassam", url: "https://image2url.com/r2/default/audio/1769835553806-6c166887-bc5b-4a31-b26b-2eb5a5e87834.mp3" },
+			{ title: "കാലം കനിഞ്ഞൊരു താരം", url: "https://image2url.com/r2/default/audio/1769836517858-791af2ca-6277-428c-83d3-8b88191d0eb2.mp3" },
+			{ title: "വാതിലിനോരം ചെന്നപ്പോൾ", url: "https://image2url.com/r2/default/audio/1769836625572-04019cd2-a37a-483f-954a-73854ce87d22.mp3" },
+			{ title: "പുണ്യ മദീന പള്ളിയിൽ", url: "https://image2url.com/r2/default/audio/1769836788248-f41a19ce-d98d-4506-a407-4405ce9790e2.mp3" },
+			{ title: "അല്ലാഹുവിന്റെ ദൂതരായ", url: "https://image2url.com/r2/default/audio/1769836887953-35818a32-44db-4e3b-81c3-cbd0aeee1797.mp3" },
+			{ title: "യാ ബദ്‌റൽ കമാലി", url: "https://image2url.com/r2/default/audio/1769836982595-1e28d1e8-650e-46f4-bd93-9e71a6b7d564.mp3" },
+			{ title: "മദീനയുടെ നാമത്തിൽ", url: "https://image2url.com/r2/default/audio/1769837056994-64c233d6-9fef-4c56-b218-78b1dee92b53.mp3" },
+			{ title: "പെട്ടു പോയി ഹബീബെ", url: "https://image2url.com/r2/default/audio/1769837216205-4610d242-15ee-43f4-9efc-8123ae73b61c.mp3" },
+			{ title: "ഞാൻ വന്നിരുന്നെന്റെ ഖൽബിൽ", url: "https://image2url.com/r2/default/audio/1769837283923-537d7adb-20ae-4627-8943-f5687edd6724.mp3" },
+			{ title: "ഇപ്പൊ ട്രെൻഡ്", url: "https://image2url.com/r2/default/audio/1769837451957-0bbc6006-eba5-4cdd-871b-ccf18063eeab.mp3" },
+			{ title: "എന്താ ഫീലിംഗ്", url: "https://image2url.com/r2/default/audio/1769837654703-95cbacf9-1b5b-4e01-99f8-09e04602cf84.mp3" },
+			{ title: "മനസ്സിനെ സമാധാനത്തോടെ", url: "https://image2url.com/r2/default/audio/1769837753163-67db0be3-a850-4aed-b827-450e9514e9f9.mp3" },
+			{ title: "കരയിപ്പിച്ചു കളഞ്ഞല്ലൊ", url: "https://image2url.com/r2/default/audio/1769837838273-f59b9e31-0057-4aa6-ab58-effef3b04fb8.mp3" },
+			{ title: "ഓരോ വരികളും മനസ്സിൽ", url: "https://image2url.com/r2/default/audio/1769837897570-c640abcb-56e6-498d-b7a1-9c5068fa356a.mp3" },
+			{ title: "എവർഗ്രീൻ ഫീലിംഗ്", url: "https://image2url.com/r2/default/audio/1769837998848-64ffc18c-2de9-4b0c-9ede-67f5ee56fd55.mp3" }
+        ]
+    };
+
+    function selectSinger(element, name) {
+        document.querySelectorAll('.singer-card').forEach(c => c.classList.remove('selected'));
+        element.classList.add('selected');
+        selectedSingerName = name;
+        selectedSingerImg = element.querySelector('img').src;
+    }
+
+    function toStep2() {
+        if (!selectedSingerName) return alert("Singer-e thiranjedukkuka!");
+        document.getElementById('currentSingerTitle').innerText = selectedSingerName;
+        const listDiv = document.getElementById('songDisplayList');
+        listDiv.innerHTML = "";
+        songData[selectedSingerName].forEach((song, index) => {
+            const div = document.createElement('div');
+            div.className = 'song-item';
+            div.innerHTML = "🎵 " + song.title;
+            div.onclick = () => playSong(index);
+            listDiv.appendChild(div);
+        });
+        showStep('step2');
+    }
+
+    function playSong(index) {
+        currentSongIndex = index;
+        const song = songData[selectedSingerName][index];
+        document.getElementById('playingSongName').innerText = song.title;
+        document.getElementById('playingArtistName').innerText = selectedSingerName;
+        document.getElementById('playingThumb').src = selectedSingerImg;
+        const player = document.getElementById('audioPlayer');
+        player.src = song.url;
+        player.loop = isRepeat;
+        player.play();
+        showStep('step3');
+    }
+
+    function toggleRepeat() {
+        isRepeat = !isRepeat;
+        const btn = document.getElementById('repeatBtn');
+        const player = document.getElementById('audioPlayer');
+        player.loop = isRepeat;
+        btn.innerText = isRepeat ? "🔁 Repeat: On" : "🔁 Repeat: Off";
+        btn.classList.toggle('active');
+    }
+
+    function playNextSong() {
+        let songs = songData[selectedSingerName];
+        currentSongIndex = (currentSongIndex + 1) % songs.length;
+        playSong(currentSongIndex);
+    }
+
+    document.getElementById('audioPlayer').onended = function() {
+        if (!isRepeat) playNextSong();
+    };
+
+    function showStep(id) {
+        document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    function filterSongs() {
+        let input = document.getElementById('songSearch').value.toLowerCase();
+        let items = document.getElementsByClassName('song-item');
+        for (let item of items) {
+            item.style.display = item.innerText.toLowerCase().includes(input) ? "block" : "none";
+        }
+    }
+</script>
+</body>
+</html>
